@@ -1,0 +1,38 @@
+name: Manage RDS Instance
+
+on:
+  schedule:
+    - cron: '0 19 * * 5'  # Runs every Friday at 7:00 PM UTC
+
+jobs:
+  manage-rds:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Check RDS Instance Status
+        id: check-status
+        run: |
+          STATUS=$(aws rds describe-db-instances --db-instance-identifier ${{ secrets.RDS_INSTANCE_ID }} --query "DBInstances[0].DBInstanceStatus" --output text)
+          echo "Current RDS Status: $STATUS"
+          echo "STATUS=$STATUS" >> $GITHUB_ENV
+
+      - name: Handle RDS Based on Status
+        run: |
+          if [ "$STATUS" == "available" ]; then
+            echo "RDS is already running. Stopping it now..."
+            aws rds stop-db-instance --db-instance-identifier ${{ secrets.RDS_INSTANCE_ID }}
+          else
+            echo "RDS is not running. Starting it now..."
+            aws rds start-db-instance --db-instance-identifier ${{ secrets.RDS_INSTANCE_ID }}
+            echo "Waiting for 20 minutes..."
+            sleep 1200  # 1200 seconds = 20 minutes
+            echo "Stopping RDS after wait..."
+            aws rds stop-db-instance --db-instance-identifier ${{ secrets.RDS_INSTANCE_ID }}
+          fi
